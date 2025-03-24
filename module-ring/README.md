@@ -18,8 +18,8 @@ Zmodyfikuj kod sterownika **ring** tak aby spełniał następujące wymagania:
 3. **Obsługa polecenia `ioctl` do odczytu długości bufora**  
    - Użytkownik powinien mieć możliwość **odczytu aktualnej długości bufora**.
 
-4. **Moduł jądra**  
-   - Sterownik powinien być możliwy do skompilowania jako **moduł jądra**.
+4. **Moduł jądra** ✅
+   - Sterownik powinien być możliwy do skompilowania jako **moduł jądra
 
 
 # Zarzadzanie modułem `ring`
