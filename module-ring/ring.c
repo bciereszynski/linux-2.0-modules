@@ -105,18 +105,24 @@ struct file_operations ring_ops = {
 
 #define RING_MAJOR 60
 
-void ring_init(void) {
+int  ring_init(void) {
 	init_waitqueue(&write_queue);
 	init_waitqueue(&read_queue);
 	usecount=0;
-	register_chrdev(RING_MAJOR,"ring",&ring_ops);
-	printk("Ring device initialized\n");
+	return register_chrdev(RING_MAJOR,"ring",&ring_ops);
 }
 
 int init_module()
 {
-	ring_init();
-	return 0;
+	int result = ring_init();
+	if (!result){
+		printk("Ring device initialized!\n");
+	}
+	else{
+		printk("Ring device was NOT initialized!\n");
+	}
+
+	return result;
 }
 void cleanup_module() {
 	unregister_chrdev(RING_MAJOR,"ring");
