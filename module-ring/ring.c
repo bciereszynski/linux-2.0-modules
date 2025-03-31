@@ -7,25 +7,37 @@
 #include <asm/semaphore.h>
 
 #define BUFFERSIZE 1024
+#define BUFFERS_COUNT 4
 
-static char *buffer;
-int buffercount;
-int start, end;
-int usecount;
+static char *buffer[BUFFERS_COUNT];
+int buffercounts[BUFFERS_COUNT];
+int start[BUFFERS_COUNT], end[BUFFERS_COUNT];
+int usecounts[BUFFERS_COUNT];
 struct semaphore sem = MUTEX;
-struct wait_queue *read_queue, *write_queue;
+struct wait_queue *read_queue[BUFFERS_COUNT], *write_queue[BUFFERS_COUNT];
+
+int get_minor(struct inode *inode){
+	int minor;
+	minor = MINOR(inode->i_rdev);
+	if (minor > 3){
+		return 0;
+	}
+	return minor;
+}
 
 int ring_open(struct inode *inode, struct file *file)
 {
+	int minor = get_minor(inode);
 	down(&sem);
 	MOD_INC_USE_COUNT;
-	usecount++;
-	if (usecount == 1)
+	usecounts[minor]++;
+	if (usecounts[minor] == 1)
 	{
-
 		// kmalloc moze uspic proces - uwaga na synchronizacje
-		buffer = kmalloc(BUFFERSIZE, GFP_KERNEL);
-		buffercount = start = end = 0;
+		buffer[minor] = kmalloc(BUFFERSIZE, GFP_KERNEL);
+		buffercounts[minor] = 0;
+		start[minor] = 0;
+		end[minor] = 0;
 	}
 	up(&sem);
 	return 0;
@@ -33,9 +45,10 @@ int ring_open(struct inode *inode, struct file *file)
 
 void ring_release(struct inode *inode, struct file *file)
 {
-	usecount--;
-	if (usecount == 0)
-		kfree(buffer);
+	int minor = get_minor(inode);
+	usecounts[minor]--;
+	if (usecounts[minor] == 0)
+		kfree(buffer[minor]);
 	MOD_DEC_USE_COUNT;
 }
 
@@ -43,14 +56,15 @@ int ring_read(struct inode *inode, struct file *file, char *pB, int count)
 {
 	int i;
 	char tmp;
+	int minor = get_minor(inode);
 	for (i = 0; i < count; i++)
 	{
-		while (buffercount == 0)
+		while (buffercounts[minor] == 0)
 		{
-			if (usecount == 1)
+			if (usecounts[minor] == 1)
 				return i;
 
-			interruptible_sleep_on(&read_queue);
+			interruptible_sleep_on(&read_queue[minor]);
 			if (current->signal & ~current->blocked)
 			{
 				if (i == 0)
@@ -59,12 +73,12 @@ int ring_read(struct inode *inode, struct file *file, char *pB, int count)
 			}
 		}
 
-		tmp = buffer[start];
-		start++;
-		if (start == BUFFERSIZE)
-			start = 0;
-		buffercount--;
-		wake_up(&write_queue);
+		tmp = buffer[minor][start[minor]];
+		start[minor]++;
+		if (start[minor] == BUFFERSIZE)
+			start[minor] = 0;
+		buffercounts[minor]--;
+		wake_up(&write_queue[minor]);
 		put_user(tmp, pB + i);
 	}
 	return count;
@@ -74,12 +88,13 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
 {
 	int i;
 	char tmp;
+	int minor = get_minor(inode);
 	for (i = 0; i < count; i++)
 	{
 		tmp = get_user(pB + i);
-		while (buffercount == BUFFERSIZE)
+		while (buffercounts[minor] == BUFFERSIZE)
 		{
-			interruptible_sleep_on(&write_queue);
+			interruptible_sleep_on(&write_queue[minor]);
 			if (current->signal & ~current->blocked)
 			{
 				if (i == 0)
@@ -87,12 +102,12 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
 				return i;
 			}
 		}
-		buffer[end] = tmp;
-		buffercount++;
-		end++;
-		if (end == BUFFERSIZE)
-			end = 0;
-		wake_up(&read_queue);
+		buffer[minor][end[minor]] = tmp;
+		buffercounts[minor]++;
+		end[minor]++;
+		if (end[minor] == BUFFERSIZE)
+			end[minor] = 0;
+		wake_up(&read_queue[minor]);
 	}
 	return count;
 }
@@ -108,9 +123,12 @@ struct file_operations ring_ops = {
 
 int ring_init(void)
 {
-	init_waitqueue(&write_queue);
-	init_waitqueue(&read_queue);
-	usecount = 0;
+	int i;
+	for (i = 0; i<BUFFERS_COUNT; i++){
+		init_waitqueue(&write_queue[i]);
+		init_waitqueue(&read_queue[i]);
+		usecounts[i] = 0;
+	}
 	return register_chrdev(RING_MAJOR, "ring", &ring_ops);
 }
 
