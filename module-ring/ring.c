@@ -1,3 +1,11 @@
+/*
+RING BUFFER LINUX 2.0 MODULE
+Authors:
+Ciereszyński Bartosz
+Drażba Filip
+Zajączkowski Piotr
+*/
+
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/fs.h>
