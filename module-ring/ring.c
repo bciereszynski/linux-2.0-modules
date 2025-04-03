@@ -14,6 +14,7 @@
 
 #define RING_MAJOR 60
 #define RING_IOC_SETBUFSIZE _IOW(RING_MAJOR, 1, int)
+#define RING_IOC_GETBUFSIZE _IOR(RING_MAJOR, 2, int *)
 
 static char *buffer[BUFFERS_COUNT];
 int buffersizes[BUFFERS_COUNT];
@@ -23,10 +24,12 @@ int usecounts[BUFFERS_COUNT];
 struct semaphore sem = MUTEX;
 struct wait_queue *read_queue[BUFFERS_COUNT], *write_queue[BUFFERS_COUNT];
 
-int get_minor(struct inode *inode){
+int get_minor(struct inode *inode)
+{
 	int minor;
 	minor = MINOR(inode->i_rdev);
-	if (minor > 3){
+	if (minor > 3)
+	{
 		return 0;
 	}
 	return minor;
@@ -128,47 +131,66 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 	char *new_buffer;
 	int old_start, old_end, old_count, old_size;
 
-	switch(cmd) {
-		case RING_IOC_SETBUFSIZE:
-			new_size = (int)arg;
+	if (_IOC_DIR(cmd) & _IOC_READ)
+	{
+		/*
+		 * Have to validate the address given by the process.
+		 */
+		int err, len;
 
-			if (new_size < MIN_BUFFER_SIZE || new_size > MAX_BUFFER_SIZE)
-				return -EINVAL;
+		len = _IOC_SIZE(cmd);
 
-			if (new_size == buffersizes[minor])
-				return 0;
+		if ((err = verify_area(VERIFY_WRITE, (void *)arg, len)) < 0)
+			return err;
+	}
 
-			down(&sem);
+	switch (cmd)
+	{
+	case RING_IOC_SETBUFSIZE:
+		new_size = (int)arg;
 
-			old_start = start[minor];
-			old_end = end[minor];
-			old_count = buffercounts[minor];
-			old_size = buffersizes[minor];
+		if (new_size < MIN_BUFFER_SIZE || new_size > MAX_BUFFER_SIZE)
+			return -EINVAL;
 
-			new_buffer = kmalloc(new_size, GFP_KERNEL);
-
-			for (i = 0; i < old_count && i < new_size; i++) {
-				int old_index = (old_start + i) % old_size;
-				new_buffer[i] = buffer[minor][old_index];
-			}
-
-			start[minor] = 0;
-			end[minor] = i % new_size;
-			buffercounts[minor] = (i < new_size) ? i : new_size;
-
-			kfree(buffer[minor]);
-			buffer[minor] = new_buffer;
-			buffersizes[minor] = new_size;
-
-			up(&sem);
-
-			if (buffercounts[minor] < new_size)
-				wake_up(&write_queue[minor]);
-
+		if (new_size == buffersizes[minor])
 			return 0;
 
-		default:
-			return -EINVAL;
+		down(&sem);
+
+		old_start = start[minor];
+		old_end = end[minor];
+		old_count = buffercounts[minor];
+		old_size = buffersizes[minor];
+
+		new_buffer = kmalloc(new_size, GFP_KERNEL);
+
+		for (i = 0; i < old_count && i < new_size; i++)
+		{
+			int old_index = (old_start + i) % old_size;
+			new_buffer[i] = buffer[minor][old_index];
+		}
+
+		start[minor] = 0;
+		end[minor] = i % new_size;
+		buffercounts[minor] = (i < new_size) ? i : new_size;
+
+		kfree(buffer[minor]);
+		buffer[minor] = new_buffer;
+		buffersizes[minor] = new_size;
+
+		up(&sem);
+
+		if (buffercounts[minor] < new_size)
+			wake_up(&write_queue[minor]);
+
+		return 0;
+
+	case RING_IOC_GETBUFSIZE:
+		put_user(buffersizes[minor], (int *)arg);
+		return 0;
+
+	default:
+		return -EINVAL;
 	}
 }
 
@@ -180,11 +202,11 @@ struct file_operations ring_ops = {
 	ioctl : ring_ioctl
 };
 
-
 int ring_init(void)
 {
 	int i;
-	for (i = 0; i<BUFFERS_COUNT; i++){
+	for (i = 0; i < BUFFERS_COUNT; i++)
+	{
 		init_waitqueue(&write_queue[i]);
 		init_waitqueue(&read_queue[i]);
 		usecounts[i] = 0;
