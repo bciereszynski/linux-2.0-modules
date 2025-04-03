@@ -25,9 +25,9 @@ int main()
                 return 0;
         } 
 
-        // printf("Reading Value from Driver\n");
-        // ioctl(fd, RD_VALUE, (int*) &value);
-        // printf("Value is %d\n", value);
+        printf("Reading Value from Driver\n");
+        ioctl(fd, RD_VALUE, (int*) &value);
+        printf("Value is %d\n", value);
 
         printf("Enter the Value to send\n");
         scanf("%d",&number);
