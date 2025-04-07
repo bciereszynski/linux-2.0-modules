@@ -25,10 +25,10 @@ Zajączkowski Piotr
 #define RING_IOC_GETBUFSIZE _IOR(RING_MAJOR, 2, int *)
 
 static char *buffer[BUFFERS_COUNT];
-int buffersizes[BUFFERS_COUNT];
-int buffercounts[BUFFERS_COUNT];
+int buffersize[BUFFERS_COUNT];
+int buffercount[BUFFERS_COUNT];
 int start[BUFFERS_COUNT], end[BUFFERS_COUNT];
-int usecounts[BUFFERS_COUNT];
+int usecount[BUFFERS_COUNT];
 struct semaphore sem[BUFFERS_COUNT];
 
 struct wait_queue *read_queue[BUFFERS_COUNT], *write_queue[BUFFERS_COUNT];
@@ -37,7 +37,7 @@ int get_minor(struct inode *inode)
 {
 	int minor;
 	minor = MINOR(inode->i_rdev);
-	if (minor > BUFFERS_COUNT-1)
+	if (minor > BUFFERS_COUNT - 1)
 	{
 		return -ENODEV;
 	}
@@ -53,20 +53,19 @@ int ring_open(struct inode *inode, struct file *file)
 	}
 	down(&sem[minor]);
 	MOD_INC_USE_COUNT;
-	usecounts[minor]++;
-	if (usecounts[minor] == 1)
+	usecount[minor]++;
+	if (usecount[minor] == 1)
 	{
-		// kmalloc moze uspic proces - uwaga na synchronizacje
 		buffer[minor] = kmalloc(BUFFERSIZE, GFP_KERNEL);
 		if (buffer[minor] == NULL)
 		{
-			usecounts[minor]--;
+			usecount[minor]--;
 			up(&sem[minor]);
 			return -ENOMEM;
 		}
 
-		buffersizes[minor] = BUFFERSIZE;
-		buffercounts[minor] = 0;
+		buffersize[minor] = BUFFERSIZE;
+		buffercount[minor] = 0;
 		start[minor] = 0;
 		end[minor] = 0;
 	}
@@ -81,8 +80,8 @@ void ring_release(struct inode *inode, struct file *file)
 	{
 		return;
 	}
-	usecounts[minor]--;
-	if (usecounts[minor] == 0)
+	usecount[minor]--;
+	if (usecount[minor] == 0)
 		kfree(buffer[minor]);
 	MOD_DEC_USE_COUNT;
 }
@@ -98,9 +97,9 @@ int ring_read(struct inode *inode, struct file *file, char *pB, int count)
 	}
 	for (i = 0; i < count; i++)
 	{
-		while (buffercounts[minor] == 0)
+		while (buffercount[minor] == 0)
 		{
-			if (usecounts[minor] == 1)
+			if (usecount[minor] == 1)
 				return i;
 
 			interruptible_sleep_on(&read_queue[minor]);
@@ -115,9 +114,9 @@ int ring_read(struct inode *inode, struct file *file, char *pB, int count)
 
 		tmp = buffer[minor][start[minor]];
 		start[minor]++;
-		if (start[minor] == buffersizes[minor])
+		if (start[minor] == buffersize[minor])
 			start[minor] = 0;
-		buffercounts[minor]--;
+		buffercount[minor]--;
 		wake_up(&write_queue[minor]);
 		put_user(tmp, pB + i);
 	}
@@ -136,7 +135,7 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
 	for (i = 0; i < count; i++)
 	{
 		tmp = get_user(pB + i);
-		while (buffercounts[minor] == buffersizes[minor])
+		while (buffercount[minor] == buffersize[minor])
 		{
 			interruptible_sleep_on(&write_queue[minor]);
 			if (current->signal & ~current->blocked)
@@ -147,9 +146,9 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
 			}
 		}
 		buffer[minor][end[minor]] = tmp;
-		buffercounts[minor]++;
+		buffercount[minor]++;
 		end[minor]++;
-		if (end[minor] == buffersizes[minor])
+		if (end[minor] == buffersize[minor])
 			end[minor] = 0;
 		wake_up(&read_queue[minor]);
 	}
@@ -188,18 +187,18 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 		if (new_size < MIN_BUFFER_SIZE || new_size > MAX_BUFFER_SIZE)
 			return -EINVAL;
 
-		if (new_size == buffersizes[minor])
+		if (new_size == buffersize[minor])
 			return 0;
 
-		if (new_size < buffercounts[minor])
+		if (new_size < buffercount[minor])
 			return -EBUSY;
 
 		down(&sem[minor]);
 
 		old_start = start[minor];
 		old_end = end[minor];
-		old_count = buffercounts[minor];
-		old_size = buffersizes[minor];
+		old_count = buffercount[minor];
+		old_size = buffersize[minor];
 
 		new_buffer = kmalloc(new_size, GFP_KERNEL);
 		if (new_buffer == NULL)
@@ -216,21 +215,21 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 
 		start[minor] = 0;
 		end[minor] = i % new_size;
-		buffercounts[minor] = (i < new_size) ? i : new_size;
+		buffercount[minor] = (i < new_size) ? i : new_size;
 
 		kfree(buffer[minor]);
 		buffer[minor] = new_buffer;
-		buffersizes[minor] = new_size;
+		buffersize[minor] = new_size;
 
 		up(&sem[minor]);
 
-		if (buffercounts[minor] < new_size)
+		if (buffercount[minor] < new_size)
 			wake_up(&write_queue[minor]);
 
 		return 0;
 
 	case RING_IOC_GETBUFSIZE:
-		put_user(buffersizes[minor], (int *)arg);
+		put_user(buffersize[minor], (int *)arg);
 		return 0;
 
 	default:
@@ -253,8 +252,8 @@ int ring_init(void)
 	{
 		init_waitqueue(&write_queue[i]);
 		init_waitqueue(&read_queue[i]);
-		usecounts[i] = 0;
-		buffersizes[i] = BUFFERSIZE;
+		usecount[i] = 0;
+		buffersize[i] = BUFFERSIZE;
 		sem[i] = MUTEX;
 	}
 	return register_chrdev(RING_MAJOR, "ring", &ring_ops);
@@ -266,10 +265,6 @@ int init_module()
 	if (!result)
 	{
 		printk("Ring device initialized!\n");
-	}
-	else
-	{
-		printk("Ring device was NOT initialized!\n");
 	}
 
 	return result;
