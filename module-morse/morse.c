@@ -287,8 +287,6 @@ void morse_release(struct inode *inode, struct file *file)
 		return;
 	}
 
-	down(&sem[minor]);
-
 	device_in_use[minor]--;
 	if (device_in_use[minor] == 0 && !is_transmitting[minor])
 	{
@@ -296,8 +294,6 @@ void morse_release(struct inode *inode, struct file *file)
 		kfree(buffer[minor]);
 		MOD_DEC_USE_COUNT;
 	}
-
-	up(&sem[minor]);
 }
 
 int morse_write(struct inode *inode, struct file *file, const char *buf, int count)
@@ -369,15 +365,12 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 			return err;
 	}
 
-	down(&sem[minor]);
-
 	switch (cmd)
 	{
 	case MORSE_IOC_SET_DOT_DURATION:
 		value = (int)arg;
 		if (value <= 0)
 		{
-			up(&sem[minor]);
 			return -EINVAL;
 		}
 		dot_duration[minor] = value;
@@ -387,7 +380,6 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		value = (int)arg;
 		if (value <= 0)
 		{
-			up(&sem[minor]);
 			return -EINVAL;
 		}
 		dash_duration[minor] = value;
@@ -397,7 +389,6 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		value = (int)arg;
 		if (value <= 0)
 		{
-			up(&sem[minor]);
 			return -EINVAL;
 		}
 		symbol_pause[minor] = value;
@@ -407,7 +398,6 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		value = (int)arg;
 		if (value <= 0)
 		{
-			up(&sem[minor]);
 			return -EINVAL;
 		}
 		letter_pause[minor] = value;
@@ -417,7 +407,6 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		value = (int)arg;
 		if (value <= 0)
 		{
-			up(&sem[minor]);
 			return -EINVAL;
 		}
 		word_pause[minor] = value;
@@ -427,23 +416,20 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		new_size = (int)arg;
 		if (new_size < MIN_BUFFER_SIZE || new_size > MAX_BUFFER_SIZE)
 		{
-			up(&sem[minor]);
 			return -EINVAL;
 		}
 
 		if (new_size == buffer_size[minor])
 		{
-			up(&sem[minor]);
 			return 0;
 		}
 
 		if (new_size < buffer_count[minor])
 		{
-			up(&sem[minor]);
 			return -EBUSY;
 		}
 
-
+		down(&sem[minor]);
 		new_buffer = kmalloc(new_size, GFP_KERNEL);
 		if (new_buffer == NULL)
 		{
@@ -466,6 +452,7 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		buffer_size[minor] = new_size;
 		buffer_head[minor] = buffer_count[minor] % new_size;
 		buffer_tail[minor] = 0;
+		up(&sem[minor]);
 
 		break;
 
@@ -474,7 +461,6 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		break;
 
 	default:
-		up(&sem[minor]);
 		return -EINVAL;
 	}
 
