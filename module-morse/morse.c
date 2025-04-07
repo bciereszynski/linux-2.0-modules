@@ -207,6 +207,7 @@ void morse_timer_function(unsigned long data)
 			if (device_in_use[minor] == 0)
 			{
 				kfree(buffer[minor]);
+				MOD_DEC_USE_COUNT;
 			}
 			return;
 		}
@@ -260,6 +261,7 @@ int morse_open(struct inode *inode, struct file *file)
 	down(&sem[minor]);
 
 	device_in_use[minor]++;
+	MOD_INC_USE_COUNT;
 	if (device_in_use[minor] == 1)
 	{
 		buffer[minor] = kmalloc(DEFAULT_BUFFER_SIZE, GFP_KERNEL);
@@ -297,10 +299,10 @@ void morse_release(struct inode *inode, struct file *file)
 	{
 		// Only free the buffer if not transmitting and no more users
 		kfree(buffer[minor]);
+		MOD_DEC_USE_COUNT;
 	}
 
 	up(&sem[minor]);
-	MOD_DEC_USE_COUNT;
 }
 
 int morse_write(struct inode *inode, struct file *file, const char *buf, int count)
