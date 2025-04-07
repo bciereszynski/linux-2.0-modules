@@ -145,14 +145,12 @@ void morse_timer_function(unsigned long data)
 
 	if (current_code[minor] == NULL || *current_code[minor] == '\0')
 	{
-		// Move to the next character in the buffer
 		if (buffer_count[minor] > 0)
 		{
 			current_char[minor] = buffer[minor][buffer_tail[minor]];
 			buffer_tail[minor] = (buffer_tail[minor] + 1) % buffer_size[minor];
 			buffer_count[minor]--;
 
-			// Convert character to Morse code
 			if (current_char[minor] >= 'A' && current_char[minor] <= 'Z')
 			{
 				current_code[minor] = morse_codes[current_char[minor] - 'A'];
@@ -167,7 +165,7 @@ void morse_timer_function(unsigned long data)
 			}
 			else if (current_char[minor] == ' ')
 			{
-				// Space - special case for word pause
+				// Word pause
 				set_signal(minor, 0);
 				morse_timer[minor].expires = jiffies + (word_pause[minor] * HZ / 1000);
 				add_timer(&morse_timer[minor]);
@@ -175,7 +173,7 @@ void morse_timer_function(unsigned long data)
 			}
 			else
 			{
-				// Ignore other characters and process the next one immediately
+				// Ignore other characters
 				morse_timer[minor].expires = jiffies + 1;
 				add_timer(&morse_timer[minor]);
 				return;
@@ -446,7 +444,6 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 			}
 		}
 
-		// Update buffer pointers
 		kfree(buffer[minor]);
 		buffer[minor] = new_buffer;
 		buffer_size[minor] = new_size;
