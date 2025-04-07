@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,7 +39,7 @@ int main()
 
         if (err != 0)
         {
-                printf("Error: %d \n", err);
+                printf("errno: %d\n", errno);    
         }
 
         printf("Closing Driver\n");
