@@ -15,10 +15,8 @@ Zajączkowski Piotr
 #include <linux/ioctl.h>
 #include <linux/timer.h>
 #include <asm/semaphore.h>
-#include <linux/tty.h>
-#include <linux/kd.h>
-#include <linux/console.h>
-#include <linux/vt.h>
+
+#include "console_struct.h"
 
 #define MORSE_MAJOR 61
 #define DEVICES_COUNT 8
@@ -118,35 +116,32 @@ static int get_minor(struct inode *inode)
 	return minor;
 }
 
-// Function to set console color for signaling
-static void set_signal(int minor, int state)
+void set_signal(int minor, int state)
 {
-	struct tty_struct *tty;
-	struct console *con;
+	struct vc_data *vc;
+	unsigned short *screen;
+	int currcons = fg_console;
 
-	// Get current console
-	tty = current->tty;
-	if (tty && tty->driver.type == TTY_DRIVER_TYPE_CONSOLE)
+	vc = vc_cons[currcons].d;
+	if (!vc)
+		return;
+
+	screen = (unsigned short *)(vc->vc_origin);
+
+	if (state)
 	{
-		if (state)
-		{
-			// Signal ON - set bright white on red background
-			tty->driver.write(tty, 0, "\033[1;37;41m \033[0m", 13);
-		}
-		else
-		{
-			// Signal OFF - restore normal color and space
-			tty->driver.write(tty, 0, "\033[0m ", 5);
-		}
-		// Move cursor back to beginning
-		tty->driver.write(tty, 0, "\r", 1);
+		screen[0] = (0x4 << 12) | (0xF << 8) | ' ';
+	}
+	else
+	{
+		screen[0] = (0x0 << 12) | (0x7 << 8) | ' ';
 	}
 
 	signal_state[minor] = state;
 }
 
 // Timer function to handle Morse code transmission
-static void morse_timer_function(unsigned long data)
+void morse_timer_function(unsigned long data)
 {
 	int minor = (int)data;
 
@@ -209,6 +204,10 @@ static void morse_timer_function(unsigned long data)
 			// Buffer is empty, transmission complete
 			is_transmitting[minor] = 0;
 			set_signal(minor, 0);
+			if (device_in_use[minor] == 0)
+			{
+				kfree(buffer[minor]);
+			}
 			return;
 		}
 	}
@@ -294,7 +293,7 @@ void morse_release(struct inode *inode, struct file *file)
 	down(&sem[minor]);
 
 	device_in_use[minor]--;
-	if (device_in_use[minor] == 0 && !is_transmitting[minor]) // TODO
+	if (device_in_use[minor] == 0 && !is_transmitting[minor])
 	{
 		// Only free the buffer if not transmitting and no more users
 		kfree(buffer[minor]);
@@ -499,7 +498,7 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 	return 0;
 }
 
-struct file_operations morse_fops = {
+struct file_operations morse_ops = {
 	read : morse_read,
 	write : morse_write,
 	ioctl : morse_ioctl,
@@ -522,7 +521,7 @@ int morse_init(void)
 		letter_pause[i] = LETTER_PAUSE;
 		word_pause[i] = WORD_PAUSE;
 	}
-	return register_chrdev(MORSE_MAJOR, "morse", &morse_fops);
+	return register_chrdev(MORSE_MAJOR, "morse", &morse_ops);
 }
 
 int init_module()
