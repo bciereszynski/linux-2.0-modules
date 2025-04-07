@@ -53,6 +53,12 @@ int ring_open(struct inode *inode, struct file *file)
 	{
 		// kmalloc moze uspic proces - uwaga na synchronizacje
 		buffer[minor] = kmalloc(BUFFERSIZE, GFP_KERNEL);
+		if (buffer[minor] == NULL){
+			usecounts[minor]--;
+			up(&sem);
+			return -ENOMEM;
+		}
+
 		buffersizes[minor] = BUFFERSIZE;
 		buffercounts[minor] = 0;
 		start[minor] = 0;
@@ -171,6 +177,10 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 		old_size = buffersizes[minor];
 
 		new_buffer = kmalloc(new_size, GFP_KERNEL);
+		if (new_buffer == NULL){
+			up(&sem);
+			return -ENOMEM;
+		}
 
 		for (i = 0; i < old_count && i < new_size; i++)
 		{
