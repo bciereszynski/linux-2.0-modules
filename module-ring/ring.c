@@ -29,7 +29,8 @@ int buffersizes[BUFFERS_COUNT];
 int buffercounts[BUFFERS_COUNT];
 int start[BUFFERS_COUNT], end[BUFFERS_COUNT];
 int usecounts[BUFFERS_COUNT];
-struct semaphore sem = MUTEX;
+struct semaphore sem[BUFFERS_COUNT];
+
 struct wait_queue *read_queue[BUFFERS_COUNT], *write_queue[BUFFERS_COUNT];
 
 int get_minor(struct inode *inode)
@@ -50,7 +51,7 @@ int ring_open(struct inode *inode, struct file *file)
 	{
 		return minor;
 	}
-	down(&sem);
+	down(&sem[minor]);
 	MOD_INC_USE_COUNT;
 	usecounts[minor]++;
 	if (usecounts[minor] == 1)
@@ -59,7 +60,7 @@ int ring_open(struct inode *inode, struct file *file)
 		buffer[minor] = kmalloc(BUFFERSIZE, GFP_KERNEL);
 		if (buffer[minor] == NULL){
 			usecounts[minor]--;
-			up(&sem);
+			up(&sem[minor]);
 			return -ENOMEM;
 		}
 
@@ -68,7 +69,7 @@ int ring_open(struct inode *inode, struct file *file)
 		start[minor] = 0;
 		end[minor] = 0;
 	}
-	up(&sem);
+	up(&sem[minor]);
 	return 0;
 }
 
@@ -164,7 +165,7 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 	{
 		return minor;
 	}
-
+	
 	if (_IOC_DIR(cmd) & _IOC_READ)
 	{
 		/*
@@ -189,7 +190,7 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 		if (new_size == buffersizes[minor])
 			return 0;
 
-		down(&sem);
+		down(&sem[minor]);
 
 		old_start = start[minor];
 		old_end = end[minor];
@@ -198,7 +199,7 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 
 		new_buffer = kmalloc(new_size, GFP_KERNEL);
 		if (new_buffer == NULL){
-			up(&sem);
+			up(&sem[minor]);
 			return -ENOMEM;
 		}
 
@@ -216,7 +217,7 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 		buffer[minor] = new_buffer;
 		buffersizes[minor] = new_size;
 
-		up(&sem);
+		up(&sem[minor]);
 
 		if (buffercounts[minor] < new_size)
 			wake_up(&write_queue[minor]);
@@ -249,6 +250,7 @@ int ring_init(void)
 		init_waitqueue(&read_queue[i]);
 		usecounts[i] = 0;
 		buffersizes[i] = BUFFERSIZE;
+		sem[i] = MUTEX;
 	}
 	return register_chrdev(RING_MAJOR, "ring", &ring_ops);
 }
