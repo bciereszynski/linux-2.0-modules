@@ -1,3 +1,4 @@
 .vscode/settings.json
 
 linux
+.vscode/c_cpp_properties.json
