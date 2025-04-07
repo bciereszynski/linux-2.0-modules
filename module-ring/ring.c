@@ -38,7 +38,7 @@ int get_minor(struct inode *inode)
 	minor = MINOR(inode->i_rdev);
 	if (minor > 3)
 	{
-		return 0;
+		return -ENODEV;
 	}
 	return minor;
 }
@@ -46,6 +46,10 @@ int get_minor(struct inode *inode)
 int ring_open(struct inode *inode, struct file *file)
 {
 	int minor = get_minor(inode);
+	if (minor < 0)
+	{
+		return minor;
+	}
 	down(&sem);
 	MOD_INC_USE_COUNT;
 	usecounts[minor]++;
@@ -71,6 +75,10 @@ int ring_open(struct inode *inode, struct file *file)
 void ring_release(struct inode *inode, struct file *file)
 {
 	int minor = get_minor(inode);
+	if (minor < 0)
+	{
+		return;
+	}
 	usecounts[minor]--;
 	if (usecounts[minor] == 0)
 		kfree(buffer[minor]);
@@ -82,6 +90,10 @@ int ring_read(struct inode *inode, struct file *file, char *pB, int count)
 	int i;
 	char tmp;
 	int minor = get_minor(inode);
+	if (minor < 0)
+	{
+		return minor;
+	}
 	for (i = 0; i < count; i++)
 	{
 		while (buffercounts[minor] == 0)
@@ -115,6 +127,10 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
 	int i;
 	char tmp;
 	int minor = get_minor(inode);
+	if (minor < 0)
+	{
+		return minor;
+	}
 	for (i = 0; i < count; i++)
 	{
 		tmp = get_user(pB + i);
@@ -140,10 +156,14 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
 
 int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)
 {
-	int minor = get_minor(inode);
 	int new_size, i;
 	char *new_buffer;
 	int old_start, old_end, old_count, old_size;
+	int minor = get_minor(inode);
+	if (minor < 0)
+	{
+		return minor;
+	}
 
 	if (_IOC_DIR(cmd) & _IOC_READ)
 	{
