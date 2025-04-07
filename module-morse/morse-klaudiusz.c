@@ -20,7 +20,7 @@ Zajączkowski Piotr
 #include <linux/console.h>
 #include <linux/vt.h>
 
-#define MORSE_MAJOR 60
+#define MORSE_MAJOR 61
 #define DEVICES_COUNT 8
 #define DEFAULT_BUFFER_SIZE 256
 #define MIN_BUFFER_SIZE 0
@@ -262,7 +262,6 @@ static int morse_open(struct inode *inode, struct file *file)
 
 	down(&sem[minor]);
 
-	MOD_INC_USE_COUNT;
 
 	if (device_in_use[minor] == 0)
 	{
@@ -271,11 +270,9 @@ static int morse_open(struct inode *inode, struct file *file)
 		if (buffer[minor] == NULL)
 		{
 			up(&sem[minor]);
-			MOD_DEC_USE_COUNT;
 			return -ENOMEM;
 		}
 
-		buffer_size[minor] = DEFAULT_BUFFER_SIZE;
 		buffer_count[minor] = 0;
 		buffer_head[minor] = 0;
 		buffer_tail[minor] = 0;
@@ -343,7 +340,7 @@ static int morse_write(struct inode *inode, struct file *file, const char *buf, 
 		}
 
 		// Get user space character
-		get_user(&ch, buf + i);
+		ch = get_user(buf + i);
 
 		// Store in buffer
 		buffer[minor][buffer_head[minor]] = ch;
@@ -525,3 +522,30 @@ static struct file_operations morse_fops = {
 	open : morse_open,
 	release : morse_release
 };
+
+int morse_init(void)
+{
+	int i;
+	for (i = 0; i < DEVICES_COUNT; i++)
+	{
+		device_in_use[i] = 0;
+		buffer_size[i] = DEFAULT_BUFFER_SIZE;
+		sem[i] = MUTEX;
+	}
+    return register_chrdev(MORSE_MAJOR, "morse", &morse_fops);
+}
+
+int init_module()
+{
+	int result = morse_init();
+	if (!result)
+	{
+		printk("Morse device initialized!\n");
+	}
+
+	return result;
+}
+
+void cleanup_module(){
+    unregister_chrdev(MORSE_MAJOR, "morse");
+}
