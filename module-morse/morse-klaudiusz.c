@@ -26,13 +26,12 @@ Zajączkowski Piotr
 #define MIN_BUFFER_SIZE 0
 #define MAX_BUFFER_SIZE 1024
 
-#define DOT_DURATION 200  // milliseconds
-#define DASH_DURATION 600 // milliseconds
-#define SYMBOL_PAUSE 200  // milliseconds
-#define LETTER_PAUSE 600  // milliseconds
-#define WORD_PAUSE 1400	  // milliseconds
+#define DOT_DURATION 200 // milliseconds
+#define DASH_DURATION 600
+#define SYMBOL_PAUSE 200
+#define LETTER_PAUSE 600
+#define WORD_PAUSE 1400
 
-// IOCTL commands
 #define MORSE_IOC_SET_DOT_DURATION _IOW(MORSE_MAJOR, 1, int)
 #define MORSE_IOC_SET_DASH_DURATION _IOW(MORSE_MAJOR, 2, int)
 #define MORSE_IOC_SET_SYMBOL_PAUSE _IOW(MORSE_MAJOR, 3, int)
@@ -41,7 +40,7 @@ Zajączkowski Piotr
 #define MORSE_IOC_SET_BUFFER_SIZE _IOW(MORSE_MAJOR, 6, int)
 #define MORSE_IOC_GET_BUFFER_SIZE _IOR(MORSE_MAJOR, 7, int *)
 
-// Morse code patterns (. = dot, - = dash)
+// Morse code patterns
 static const char *morse_codes[] = {
 	".-",	// A
 	"-...", // B
@@ -251,8 +250,7 @@ static void morse_timer_function(unsigned long data)
 	add_timer(&morse_timer[minor]);
 }
 
-// Open the device
-static int morse_open(struct inode *inode, struct file *file)
+int morse_open(struct inode *inode, struct file *file)
 {
 	int minor = get_minor(inode);
 	if (minor < 0)
@@ -262,10 +260,9 @@ static int morse_open(struct inode *inode, struct file *file)
 
 	down(&sem[minor]);
 
-
-	if (device_in_use[minor] == 0)
+	device_in_use[minor]++;
+	if (device_in_use[minor] == 1)
 	{
-		// Initialize the device on first open
 		buffer[minor] = kmalloc(DEFAULT_BUFFER_SIZE, GFP_KERNEL);
 		if (buffer[minor] == NULL)
 		{
@@ -277,25 +274,16 @@ static int morse_open(struct inode *inode, struct file *file)
 		buffer_head[minor] = 0;
 		buffer_tail[minor] = 0;
 
-		// Set default timings
-		dot_duration[minor] = DOT_DURATION;
-		dash_duration[minor] = DASH_DURATION;
-		symbol_pause[minor] = SYMBOL_PAUSE;
-		letter_pause[minor] = LETTER_PAUSE;
-		word_pause[minor] = WORD_PAUSE;
-
 		is_transmitting[minor] = 0;
 		signal_state[minor] = 0;
 	}
 
-	device_in_use[minor]++;
 	up(&sem[minor]);
 
 	return 0;
 }
 
-// Close the device
-static void morse_release(struct inode *inode, struct file *file)
+void morse_release(struct inode *inode, struct file *file)
 {
 	int minor = get_minor(inode);
 	if (minor < 0)
@@ -306,8 +294,7 @@ static void morse_release(struct inode *inode, struct file *file)
 	down(&sem[minor]);
 
 	device_in_use[minor]--;
-
-	if (device_in_use[minor] == 0 && !is_transmitting[minor])
+	if (device_in_use[minor] == 0 && !is_transmitting[minor]) // TODO
 	{
 		// Only free the buffer if not transmitting and no more users
 		kfree(buffer[minor]);
@@ -317,8 +304,7 @@ static void morse_release(struct inode *inode, struct file *file)
 	MOD_DEC_USE_COUNT;
 }
 
-// Write to the device
-static int morse_write(struct inode *inode, struct file *file, const char *buf, int count)
+int morse_write(struct inode *inode, struct file *file, const char *buf, int count)
 {
 	int minor = get_minor(inode);
 	int i, bytes_written = 0;
@@ -367,14 +353,12 @@ static int morse_write(struct inode *inode, struct file *file, const char *buf, 
 	return bytes_written;
 }
 
-// Read is not supported since this is a write-only device
-static int morse_read(struct inode *inode, struct file *file, char *buf, int count)
+int morse_read(struct inode *inode, struct file *file, char *buf, int count)
 {
-	return -EINVAL; // Operation not permitted
+	return -EPERM;
 }
 
-// IOCTL to control timing and buffer size
-static int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)
+int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int minor = get_minor(inode);
 	int value, err;
@@ -515,7 +499,7 @@ static int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	return 0;
 }
 
-static struct file_operations morse_fops = {
+struct file_operations morse_fops = {
 	read : morse_read,
 	write : morse_write,
 	ioctl : morse_ioctl,
@@ -531,8 +515,14 @@ int morse_init(void)
 		device_in_use[i] = 0;
 		buffer_size[i] = DEFAULT_BUFFER_SIZE;
 		sem[i] = MUTEX;
+
+		dot_duration[i] = DOT_DURATION;
+		dash_duration[i] = DASH_DURATION;
+		symbol_pause[i] = SYMBOL_PAUSE;
+		letter_pause[i] = LETTER_PAUSE;
+		word_pause[i] = WORD_PAUSE;
 	}
-    return register_chrdev(MORSE_MAJOR, "morse", &morse_fops);
+	return register_chrdev(MORSE_MAJOR, "morse", &morse_fops);
 }
 
 int init_module()
@@ -546,6 +536,7 @@ int init_module()
 	return result;
 }
 
-void cleanup_module(){
-    unregister_chrdev(MORSE_MAJOR, "morse");
+void cleanup_module()
+{
+	unregister_chrdev(MORSE_MAJOR, "morse");
 }
