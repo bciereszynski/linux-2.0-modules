@@ -105,8 +105,7 @@ static const char *current_code[DEVICES_COUNT];
 static int code_position[DEVICES_COUNT];
 static int signal_state[DEVICES_COUNT]; // 0 = off, 1 = on
 
-// Helper function to get the minor device number
-static int get_minor(struct inode *inode)
+int get_minor(struct inode *inode)
 {
 	int minor = MINOR(inode->i_rdev);
 	if (minor >= DEVICES_COUNT)
@@ -140,12 +139,10 @@ void set_signal(int minor, int state)
 	signal_state[minor] = state;
 }
 
-// Timer function to handle Morse code transmission
 void morse_timer_function(unsigned long data)
 {
 	int minor = (int)data;
 
-	// If we're done with the current character's code
 	if (current_code[minor] == NULL || *current_code[minor] == '\0')
 	{
 		// Move to the next character in the buffer
@@ -201,7 +198,6 @@ void morse_timer_function(unsigned long data)
 		}
 		else
 		{
-			// Buffer is empty, transmission complete
 			is_transmitting[minor] = 0;
 			set_signal(minor, 0);
 			if (device_in_use[minor] == 0)
@@ -214,10 +210,9 @@ void morse_timer_function(unsigned long data)
 	}
 	else
 	{
-		// We're in the middle of transmitting a character
 		if (signal_state[minor])
 		{
-			// Signal was on, turn it off and wait for symbol pause
+			// Signal was on, symbol pause
 			set_signal(minor, 0);
 			morse_timer[minor].expires = jiffies + (symbol_pause[minor] * HZ / 1000);
 		}
@@ -226,9 +221,9 @@ void morse_timer_function(unsigned long data)
 			// Signal was off
 			if (current_code[minor][code_position[minor]] == '\0')
 			{
-				// End of character, wait for letter pause
+				// Letter pause
 				morse_timer[minor].expires = jiffies + (letter_pause[minor] * HZ / 1000);
-				current_code[minor] = NULL; // Marks end of current character
+				current_code[minor] = NULL;
 			}
 			else if (current_code[minor][code_position[minor]] == '.')
 			{
@@ -238,7 +233,7 @@ void morse_timer_function(unsigned long data)
 				code_position[minor]++;
 			}
 			else
-			{ // must be '-'
+			{
 				// Send a dash
 				set_signal(minor, 1);
 				morse_timer[minor].expires = jiffies + (dash_duration[minor] * HZ / 1000);
@@ -326,22 +321,18 @@ int morse_write(struct inode *inode, struct file *file, const char *buf, int cou
 			break;
 		}
 
-		// Get user space character
 		ch = get_user(buf + i);
 
-		// Store in buffer
 		buffer[minor][buffer_head[minor]] = ch;
 		buffer_head[minor] = (buffer_head[minor] + 1) % buffer_size[minor];
 		buffer_count[minor]++;
 		bytes_written++;
 	}
 
-	// Start transmission if not already going
 	if (!is_transmitting[minor] && buffer_count[minor] > 0)
 	{
 		is_transmitting[minor] = 1;
 
-		// Initialize and start the timer
 		init_timer(&morse_timer[minor]);
 		morse_timer[minor].function = morse_timer_function;
 		morse_timer[minor].data = minor;
@@ -371,7 +362,6 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		return minor;
 	}
 
-	// Verify user space for read operations
 	if (_IOC_DIR(cmd) & _IOC_READ)
 	{
 		int len = _IOC_SIZE(cmd);
@@ -453,24 +443,16 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 			return -EBUSY;
 		}
 
-		// Allocate new buffer
-		if (new_size > 0)
+
+		new_buffer = kmalloc(new_size, GFP_KERNEL);
+		if (new_buffer == NULL)
 		{
-			new_buffer = kmalloc(new_size, GFP_KERNEL);
-			if (new_buffer == NULL)
-			{
-				up(&sem[minor]);
-				return -ENOMEM;
-			}
-		}
-		else
-		{
-			new_buffer = NULL;
+			up(&sem[minor]);
+			return -ENOMEM;
 		}
 
-		// Copy data to new buffer
 		old_size = buffer_size[minor];
-		if (new_size > 0 && buffer_count[minor] > 0)
+		if (buffer_count[minor] > 0)
 		{
 			for (i = 0; i < buffer_count[minor]; i++)
 			{
@@ -496,7 +478,6 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		return -EINVAL;
 	}
 
-	up(&sem[minor]);
 	return 0;
 }
 
