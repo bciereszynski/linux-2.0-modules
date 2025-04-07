@@ -190,6 +190,9 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 		if (new_size == buffersizes[minor])
 			return 0;
 
+		if (new_size < buffercounts[minor])
+			return -EBUSY;
+
 		down(&sem[minor]);
 
 		old_start = start[minor];
