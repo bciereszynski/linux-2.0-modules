@@ -37,7 +37,7 @@ int get_minor(struct inode *inode)
 {
 	int minor;
 	minor = MINOR(inode->i_rdev);
-	if (minor > 3)
+	if (minor > BUFFERS_COUNT-1)
 	{
 		return -ENODEV;
 	}
