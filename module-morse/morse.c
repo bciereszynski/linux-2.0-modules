@@ -138,7 +138,7 @@ void morse_timer_function(unsigned long data)
 {
 	int minor = (int)data;
 
-	if (current_code[minor] == NULL || *current_code[minor] == '\0')
+	if (current_code[minor] == NULL)
 	{
 		if (buffer_count[minor] > 0)
 		{
@@ -166,28 +166,9 @@ void morse_timer_function(unsigned long data)
 				add_timer(&morse_timer[minor]);
 				return;
 			}
-			else
-			{
-				// Ignore other characters
-				morse_timer[minor].expires = jiffies + 1;
-				add_timer(&morse_timer[minor]);
-				return;
-			}
 
 			code_position[minor] = 0;
-
-			// Start with the first symbol
-			if (current_code[minor][0] == '.')
-			{
-				set_signal(minor, 1);
-				morse_timer[minor].expires = jiffies + (dot_duration[minor] * HZ / 1000);
-			}
-			else
-			{ // must be '-'
-				set_signal(minor, 1);
-				morse_timer[minor].expires = jiffies + (dash_duration[minor] * HZ / 1000);
-			}
-			code_position[minor]++;
+			morse_timer[minor].expires = jiffies + 1;
 		}
 		else
 		{
