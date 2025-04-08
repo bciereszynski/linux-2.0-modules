@@ -236,7 +236,7 @@ int morse_open(struct inode *inode, struct file *file)
 
 	device_in_use[minor]++;
 	MOD_INC_USE_COUNT;
-	if (device_in_use[minor] == 1)
+	if (device_in_use[minor] == 1 && !is_transmitting[minor])
 	{
 		buffer[minor] = kmalloc(DEFAULT_BUFFER_SIZE, GFP_KERNEL);
 		if (buffer[minor] == NULL)
