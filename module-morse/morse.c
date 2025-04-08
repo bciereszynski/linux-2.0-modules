@@ -117,23 +117,18 @@ int get_minor(struct inode *inode)
 
 void set_signal(int minor, int state)
 {
-	struct vc_data *vc;
-	unsigned short *screen;
+	unsigned long *screen;
 	int currcons = fg_console;
 
-	vc = vc_cons[currcons].d;
-	if (!vc)
-		return;
-
-	screen = (unsigned short *)(vc->vc_origin);
+	screen = (unsigned long *)origin;
 
 	if (state)
 	{
-		screen[0] = (0x4 << 12) | (0xF << 8) | ' ';
+		screen[0] = (0x4 << 12) | (0x4 << 8) | ' ';
 	}
 	else
 	{
-		screen[0] = (0x0 << 12) | (0x7 << 8) | ' ';
+		screen[0] = (0x0 << 12) | (0x0 << 8) | ' ';
 	}
 
 	signal_state[minor] = state;
