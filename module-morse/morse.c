@@ -104,6 +104,7 @@ static char current_char[DEVICES_COUNT];
 static const char *current_code[DEVICES_COUNT];
 static int code_position[DEVICES_COUNT];
 static int signal_state[DEVICES_COUNT]; // 0 = off, 1 = on
+struct wait_queue *write_queue[DEVICES_COUNT];
 
 int get_minor(struct inode *inode)
 {
@@ -145,6 +146,7 @@ void morse_timer_function(unsigned long data)
 			current_char[minor] = buffer[minor][buffer_tail[minor]];
 			buffer_tail[minor] = (buffer_tail[minor] + 1) % buffer_size[minor];
 			buffer_count[minor]--;
+			wake_up(&write_queue[minor]);
 
 			if (current_char[minor] >= 'A' && current_char[minor] <= 'Z')
 			{
@@ -174,11 +176,13 @@ void morse_timer_function(unsigned long data)
 		{
 			is_transmitting[minor] = 0;
 			set_signal(minor, 0);
+			down(&sem[minor]);
 			if (device_in_use[minor] == 0)
 			{
 				kfree(buffer[minor]);
 				MOD_DEC_USE_COUNT;
 			}
+			up(&sem[minor]);
 			return;
 		}
 	}
@@ -217,6 +221,7 @@ void morse_timer_function(unsigned long data)
 	}
 
 	add_timer(&morse_timer[minor]);
+	return;
 }
 
 int morse_open(struct inode *inode, struct file *file)
@@ -261,6 +266,7 @@ void morse_release(struct inode *inode, struct file *file)
 		return;
 	}
 
+	down(&sem[minor]);
 	device_in_use[minor]--;
 	if (device_in_use[minor] == 0 && !is_transmitting[minor])
 	{
@@ -268,6 +274,7 @@ void morse_release(struct inode *inode, struct file *file)
 		kfree(buffer[minor]);
 		MOD_DEC_USE_COUNT;
 	}
+	up(&sem[minor]);
 }
 
 int morse_write(struct inode *inode, struct file *file, const char *buf, int count)
@@ -285,13 +292,17 @@ int morse_write(struct inode *inode, struct file *file, const char *buf, int cou
 
 	for (i = 0; i < count; i++)
 	{
-		// If buffer is full, we can't write more
-		if (buffer_count[minor] >= buffer_size[minor])
-		{
-			break;
-		}
-
 		ch = get_user(buf + i);
+		while (buffer_count[minor] == buffer_size[minor])
+		{
+			interruptible_sleep_on(&write_queue[minor]);
+			if (current->signal & ~current->blocked)
+			{
+				if (i == 0)
+					return -ERESTARTSYS;
+				return i;
+			}
+		}
 
 		buffer[minor][buffer_head[minor]] = ch;
 		buffer_head[minor] = (buffer_head[minor] + 1) % buffer_size[minor];
@@ -427,6 +438,9 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		buffer_tail[minor] = 0;
 		up(&sem[minor]);
 
+		if (buffer_count[minor] < new_size)
+			wake_up(&write_queue[minor]);
+
 		break;
 
 	case MORSE_IOC_GET_BUFFER_SIZE:
@@ -453,6 +467,7 @@ int morse_init(void)
 	int i;
 	for (i = 0; i < DEVICES_COUNT; i++)
 	{
+		init_waitqueue(&write_queue[i]);
 		device_in_use[i] = 0;
 		buffer_size[i] = DEFAULT_BUFFER_SIZE;
 		sem[i] = MUTEX;
