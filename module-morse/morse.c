@@ -326,11 +326,6 @@ int morse_write(struct inode *inode, struct file *file, const char *buf, int cou
 	return bytes_written;
 }
 
-int morse_read(struct inode *inode, struct file *file, char *buf, int count)
-{
-	return -EPERM;
-}
-
 int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int minor = get_minor(inode);
@@ -455,7 +450,6 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 }
 
 struct file_operations morse_ops = {
-	read : morse_read,
 	write : morse_write,
 	ioctl : morse_ioctl,
 	open : morse_open,
