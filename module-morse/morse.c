@@ -288,8 +288,6 @@ int morse_write(struct inode *inode, struct file *file, const char *buf, int cou
 		return minor;
 	}
 
-	down(&sem[minor]);
-
 	for (i = 0; i < count; i++)
 	{
 		ch = get_user(buf + i);
@@ -309,6 +307,8 @@ int morse_write(struct inode *inode, struct file *file, const char *buf, int cou
 		buffer_count[minor]++;
 		bytes_written++;
 	}
+
+	down(&sem[minor]);
 
 	if (!is_transmitting[minor] && buffer_count[minor] > 0)
 	{
