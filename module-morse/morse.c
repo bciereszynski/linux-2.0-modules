@@ -183,7 +183,6 @@ void morse_timer_function(unsigned long data)
 			if (device_in_use[minor] == 0)
 			{
 				kfree(buffer[minor]);
-				MOD_DEC_USE_COUNT;
 			}
 			up(&sem[minor]);
 			return;
@@ -275,9 +274,9 @@ void morse_release(struct inode *inode, struct file *file)
 	{
 		// Only free the buffer if not transmitting and no more users
 		kfree(buffer[minor]);
-		MOD_DEC_USE_COUNT;
 	}
 	up(&sem[minor]);
+	MOD_DEC_USE_COUNT;
 }
 
 int morse_write(struct inode *inode, struct file *file, const char *buf, int count)
@@ -491,5 +490,18 @@ int init_module()
 
 void cleanup_module()
 {
+	int i;
+	for (i = 0; i < DEVICES_COUNT; i++)
+	{
+		del_timer(&morse_timer[i]);
+		if (device_in_use[i] > 0 || is_transmitting[i])
+		{
+			kfree(buffer[i]);
+		}
+		if (is_transmitting[i])
+		{
+			set_signal(i, 0);
+		}
+	}
 	unregister_chrdev(MORSE_MAJOR, "morse");
 }
