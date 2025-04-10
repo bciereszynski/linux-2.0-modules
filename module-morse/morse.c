@@ -125,11 +125,11 @@ void set_signal(int minor, int state)
 
 	if (state)
 	{
-		screen[0] = (0x4 << 12) | (0x4 << 8) | ' ';
+		screen[minor] = (0x4 << 12) | (0x4 << 8) | ' ';
 	}
 	else
 	{
-		screen[0] = (0x0 << 12) | (0x0 << 8) | ' ';
+		screen[minor] = (0x0 << 12) | (0x0 << 8) | ' ';
 	}
 
 	signal_state[minor] = state;
