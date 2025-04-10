@@ -143,9 +143,12 @@ void morse_timer_function(unsigned long data)
 	{
 		if (buffer_count[minor] > 0)
 		{
+			down(&sem[minor]);
 			current_char[minor] = buffer[minor][buffer_tail[minor]];
 			buffer_tail[minor] = (buffer_tail[minor] + 1) % buffer_size[minor];
 			buffer_count[minor]--;
+			up(&sem[minor]);
+
 			wake_up(&write_queue[minor]);
 
 			if (current_char[minor] >= 'A' && current_char[minor] <= 'Z')
@@ -302,10 +305,12 @@ int morse_write(struct inode *inode, struct file *file, const char *buf, int cou
 			}
 		}
 
+		down(&sem[minor]);
 		buffer[minor][buffer_head[minor]] = ch;
 		buffer_head[minor] = (buffer_head[minor] + 1) % buffer_size[minor];
 		buffer_count[minor]++;
 		bytes_written++;
+		up(&sem[minor]);
 	}
 
 	down(&sem[minor]);
@@ -404,12 +409,13 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 			return 0;
 		}
 
+		down(&sem[minor]);
 		if (new_size < buffer_count[minor])
 		{
+			up(&sem[minor]);
 			return -EBUSY;
 		}
 
-		down(&sem[minor]);
 		new_buffer = kmalloc(new_size, GFP_KERNEL);
 		if (new_buffer == NULL)
 		{
@@ -418,12 +424,9 @@ int morse_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsign
 		}
 
 		old_size = buffer_size[minor];
-		if (buffer_count[minor] > 0)
+		for (i = 0; i < buffer_count[minor]; i++)
 		{
-			for (i = 0; i < buffer_count[minor]; i++)
-			{
-				new_buffer[i] = buffer[minor][(buffer_tail[minor] + i) % old_size];
-			}
+			new_buffer[i] = buffer[minor][(buffer_tail[minor] + i) % old_size];
 		}
 
 		kfree(buffer[minor]);
