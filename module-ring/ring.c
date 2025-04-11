@@ -60,6 +60,7 @@ int ring_open(struct inode *inode, struct file *file)
 		if (buffer[minor] == NULL)
 		{
 			usecount[minor]--;
+			MOD_DEC_USE_COUNT;
 			up(&sem[minor]);
 			return -ENOMEM;
 		}
