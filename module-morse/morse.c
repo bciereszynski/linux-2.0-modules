@@ -243,6 +243,8 @@ int morse_open(struct inode *inode, struct file *file)
 		buffer[minor] = kmalloc(DEFAULT_BUFFER_SIZE, GFP_KERNEL);
 		if (buffer[minor] == NULL)
 		{
+			device_in_use[minor]--;
+			MOD_DEC_USE_COUNT;
 			up(&sem[minor]);
 			return -ENOMEM;
 		}
