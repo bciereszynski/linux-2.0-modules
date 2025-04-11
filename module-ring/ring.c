@@ -80,9 +80,13 @@ void ring_release(struct inode *inode, struct file *file)
 	{
 		return;
 	}
+
+	down(&sem[minor]);
 	usecount[minor]--;
 	if (usecount[minor] == 0)
 		kfree(buffer[minor]);
+	up(&sem[minor]);
+
 	MOD_DEC_USE_COUNT;
 }
 
@@ -112,11 +116,14 @@ int ring_read(struct inode *inode, struct file *file, char *pB, int count)
 			}
 		}
 
+		down(&sem[minor]);
 		tmp = buffer[minor][start[minor]];
 		start[minor]++;
 		if (start[minor] == buffersize[minor])
 			start[minor] = 0;
 		buffercount[minor]--;
+		up(&sem[minor]);
+
 		wake_up(&write_queue[minor]);
 		put_user(tmp, pB + i);
 	}
@@ -145,11 +152,15 @@ int ring_write(struct inode *inode, struct file *file, const char *pB, int count
 				return i;
 			}
 		}
+
+		down(&sem[minor]);
 		buffer[minor][end[minor]] = tmp;
 		buffercount[minor]++;
 		end[minor]++;
 		if (end[minor] == buffersize[minor])
 			end[minor] = 0;
+		up(&sem[minor]);
+
 		wake_up(&read_queue[minor]);
 	}
 	return count;
@@ -159,7 +170,7 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 {
 	int new_size, i;
 	char *new_buffer;
-	int old_start, old_end, old_count, old_size;
+	int old_size;
 	int minor = get_minor(inode);
 	if (minor < 0)
 	{
@@ -190,14 +201,13 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 		if (new_size == buffersize[minor])
 			return 0;
 
-		if (new_size < buffercount[minor])
-			return -EBUSY;
-
 		down(&sem[minor]);
 
-		old_start = start[minor];
-		old_end = end[minor];
-		old_count = buffercount[minor];
+		if (new_size < buffercount[minor]){
+			up(&sem[minor]);
+			return -EBUSY;
+		}
+
 		old_size = buffersize[minor];
 
 		new_buffer = kmalloc(new_size, GFP_KERNEL);
@@ -207,15 +217,14 @@ int ring_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigne
 			return -ENOMEM;
 		}
 
-		for (i = 0; i < old_count && i < new_size; i++)
+		for (i = 0; i < buffercount[minor]; i++)
 		{
-			int old_index = (old_start + i) % old_size;
+			int old_index = (start[minor] + i) % old_size;
 			new_buffer[i] = buffer[minor][old_index];
 		}
 
 		start[minor] = 0;
-		end[minor] = i % new_size;
-		buffercount[minor] = (i < new_size) ? i : new_size;
+		end[minor] = buffercount[minor] % new_size;
 
 		kfree(buffer[minor]);
 		buffer[minor] = new_buffer;
