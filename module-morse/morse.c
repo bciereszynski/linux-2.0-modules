@@ -320,12 +320,7 @@ int morse_write(struct inode *inode, struct file *file, const char *buf, int cou
 	if (!is_transmitting[minor] && buffer_count[minor] > 0)
 	{
 		is_transmitting[minor] = 1;
-
-		// Timer initialization in init?
-		init_timer(&morse_timer[minor]);
-		morse_timer[minor].function = morse_timer_function;
-		morse_timer[minor].data = minor;
-		morse_timer[minor].expires = jiffies + 1;
+		morse_timer[i].expires = jiffies + 1;
 		add_timer(&morse_timer[minor]);
 	}
 
@@ -477,6 +472,10 @@ int morse_init(void)
 		symbol_pause[i] = SYMBOL_PAUSE;
 		letter_pause[i] = LETTER_PAUSE;
 		word_pause[i] = WORD_PAUSE;
+
+		init_timer(&morse_timer[i]);
+		morse_timer[i].function = morse_timer_function;
+		morse_timer[i].data = i;
 	}
 	return register_chrdev(MORSE_MAJOR, "morse", &morse_ops);
 }
