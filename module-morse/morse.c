@@ -141,9 +141,9 @@ void morse_timer_function(unsigned long data)
 
 	if (current_code[minor] == NULL)
 	{
+		down(&sem[minor]);
 		if (buffer_count[minor] > 0)
 		{
-			down(&sem[minor]);
 			current_char[minor] = buffer[minor][buffer_tail[minor]];
 			buffer_tail[minor] = (buffer_tail[minor] + 1) % buffer_size[minor];
 			buffer_count[minor]--;
@@ -179,7 +179,6 @@ void morse_timer_function(unsigned long data)
 		{
 			is_transmitting[minor] = 0;
 			set_signal(minor, 0);
-			down(&sem[minor]);
 			if (device_in_use[minor] == 0)
 			{
 				kfree(buffer[minor]);
