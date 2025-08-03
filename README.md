@@ -22,9 +22,13 @@ Both modules are implemented as **loadable kernel modules (LKM)**, compiled outs
   make menuconfig
 ```
 
+### Compilation Using Script
+
+To compile the module, run:
+```zsh
+  ./gcc-module.sh module.c
+```
 This will produce an output file module.o.
-
-
 
 # Module Management
 
