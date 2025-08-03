@@ -1,23 +1,20 @@
-# ZADANIE - Modyfikacja sterownika ring
+# Ring Buffer Linux Kernel Module
 
-## Wymagania
+A Linux kernel module implementing a **multi-buffer ring (circular) buffer** with dynamic buffer resizing via `ioctl`.
 
-Zmodyfikuj kod sterownika **ring** tak aby spełniał następujące wymagania:
+## Features
+- **Four independent ring buffers**, selected by device minor number.
+- **Dynamic buffer resizing** (`ioctl`) within **256 B – 16 KB**.
+- **Query current buffer size** (`ioctl`).
+- Blocking operations:
+  - `read()` blocks when the buffer is empty.
+  - `write()` blocks when the buffer is full.
+- Proper synchronization using semaphores and wait queues.
 
-1. **Obsługa wielu buforów**  
-   - Sterownik powinien obsługiwać **cztery niezależne bufory pierścieniowe**.  
-   - Bufory powinny być rozróżniane za pomocą **numeru podrzędnego urządzenia**.
+---
 
-2. **Obsługa polecenia `ioctl` do zmiany długości bufora**  
-   - Użytkownik powinien móc dynamicznie zmieniać długość bufora.  
-   - Długość bufora powinna mieścić się w zakresie **[256B - 16KB]**.  
-   - Podanie wartości spoza tego zakresu powinno być traktowane jako **błąd**.  
-   - Zmiana długości bufora powinna być możliwa **nawet wtedy, gdy znajdują się w nim jakieś znaki**.  
-   - **Synchronizacja**: `kmalloc` może spowodować uśpienie procesu i przełączenie kontekstu – należy to uwzględnić.
+## System Requirements
+- Linux kernel 2.0 (or compatible API for kernel modules).
+- Root privileges to load/unload kernel modules.
 
-3. **Obsługa polecenia `ioctl` do odczytu długości bufora**  
-   - Użytkownik powinien mieć możliwość **odczytu aktualnej długości bufora**.
-
-4. **Moduł jądra** ✅
-   - Sterownik powinien być możliwy do skompilowania jako **moduł jądra
-
+---
