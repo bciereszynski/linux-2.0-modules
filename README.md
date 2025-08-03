@@ -1,76 +1,51 @@
-# Intellisens w vscode
+# Repository Overview
 
-Aby mieć intelisense w vscode trzeba stworzyć folder `./linux`
+This repository contains **two Linux kernel modules** designed as educational projects for character device drivers:
 
+1. **Ring buffer**
+2. **Morse Code Transmitter** – A buffered Morse code transmitter that uses screen signals (upper-left corner of the console) to represent dots, dashes, and pauses.
+
+Both modules are implemented as **loadable kernel modules (LKM)**, compiled outside the kernel source tree, and controlled via standard Linux tools (`insmod`, `rmmod`, `lsmod`). They demonstrate concepts such as:
+- Character device registration
+- Buffer management
+- Synchronization mechanisms
+- Use of timers and I/O control (ioctl)
+- Interaction with hardware/console display
+
+---
+
+## Compilation
+
+### Requirements
+- The kernel must be properly configured before building the modules:
 ```zsh
-mkdir linux
+  make menuconfig
 ```
 
-Następnie trzeba skopiować source kod linux'a
-```zsh
-cd linux
-cp -r /mnt/guest/usr/src/linux/* .
-```
-
-c_cpp_properties.json musicie sami znaleźć swojego `stdarg.h`
-```json
-{
-    "configurations": [
-        {
-            "name": "Linux",
-            "includePath": [
-                "${workspaceFolder}/**",
-                "/usr/lib/gcc/x86_64-pc-linux-gnu/14.2.1/include"
-            ],
-            "defines": [
-                "__KERNEL__"
-            ],
-            "compilerPath": "/usr/bin/gcc",
-            "cStandard": "c17",
-            "cppStandard": "gnu++17",
-            "intelliSenseMode": "linux-gcc-x64"
-        }
-    ],
-    "version": 4
-}
-```
-
-# Kompilacja
-
-### Wymagania
-- Jądro musi być conajmniej poprawnie skonfigurowane.
-```zsh
-make menuconfig
-```
-- module.c nie musi być umieszczony w drzewie źródłowym (może być np. w /root)
-
-### Kompilacja z użyciem skryptu
-```zsh
-./gcc-module.sh module.c
-```
-
-Powinien powstać plik wynikowy **module.o**
+This will produce an output file module.o.
 
 
 
-# Zarzadzanie modułem
+# Module Management
 
-### Załadowanie modułu
-Aby załadować moduł użyj polecenia:
+### Load the Module
+
+To insert the module into the kernel:
 
 ```zsh
 insmod module
 ```
 
-### Wyświetlenie listy modułów
-Aby zobaczyć listę wszystkich załadowanych modułów wraz z licznikami odwołań, użyj:
+### List Loaded Modules
+
+To display all currently loaded modules along with their reference counters:
 
 ```zsh
 lsmod
 ```
 
-### Usunięcie modułu
-Aby usunąć moduł wykonaj:
+### Remove the Module
+To remove the module from the kernel:
 
 ```zsh
 rmmod module
