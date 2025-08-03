@@ -1,19 +1,34 @@
-# PROJEKT - Nadajnik alfabetu Morse'a
-Sterownik urządzenia znakowego tylko do zapisu. 
+# Morse Code Transmitter – Linux Kernel Module
 
-## Wymagania
-- W wyniku  operacji write znaki odpowiadające dużymi i małym literom ASCII, spacji (oznacza pauzę) oraz cyfrom są nadawane za pomocą alfabetu Morse'a. Pozostałe znaki są ignorowane.
-- Sygnały świetlne są nadawane poprzez zmianę koloru maksymalnie lewego­górnego znaku na ekranie.
-- ~~Powrót z funkcji write następuje po wysłaniu wszystkich znaków.~~
-- Zapewniona jest synchronizacja na wypadek, gdy kilka procesów usiłuje jednocześnie wykonać operację write. 
-- Czas trwania kropki, kreski oraz pauzy może byc zmieniany przy pomocy ioctl. 
-- Sterownik obsługuje osiem urządzeń o różnych numerach podrzędnych. 
-- ~~Dopuszczalne jest ciągłe oczekiwanie w pętli przy wysyłaniu znaków.~~
+A Linux 2.0 kernel module that transmits characters as Morse code signals using the top-left corner of the screen as a light indicator.
 
-### Dodatkowo:
-1. (10p) Sterownik kompilowany jest jako moduł.
-2. (20p): operacja write jest buforowana
-   - Wielkość bufora urządzenia (początkowo 256 bajtów) można zmieniać za pomoca operacji ioctl w zakresie od 0 do 1024 bajtów
-   -  Zmiana rozmiaru bufora nie może powodować utraty danych. 
-   -  Powrót z write następuje po wstawieniu znaków do bufora, zamknięcie urządzenia nie może anulować transmisji znaków będących aktualnie w buforze. 
-   - Sterownik nie może ciągle oczekiwać w pętli.
+## Features
+- **Character device (write-only)**:
+  - Accepts uppercase and lowercase ASCII letters, digits, and spaces (space indicates a word pause).
+  - Ignores unsupported characters.
+- **Morse code transmission**:
+  - Signals are transmitted visually by changing the color of the top-left character on the screen.
+  - Transmission is non-blocking: `write()` returns after inserting data into the buffer, not after full transmission.
+- **Configurable timing parameters via `ioctl`**:
+  - Dot duration
+  - Dash duration
+  - Symbol pause
+  - Letter pause
+  - Word pause
+- **Eight independent devices** identified by minor numbers.
+- **Buffered transmission**:
+  - Per-device circular buffer (default 256 bytes, adjustable 0–1024 bytes).
+  - Resizing the buffer via `ioctl` preserves stored data.
+  - Transmission continues even after the device is closed.
+  - Blocking `write()` when the buffer is full (no busy waiting).
+- **Synchronization** ensures safe concurrent access from multiple processes.
+- Implemented as a **loadable kernel module**.
+
+---
+
+## System Requirements
+- Linux kernel 2.0 or compatible.
+- Root privileges to load and configure the module.
+
+---
+
